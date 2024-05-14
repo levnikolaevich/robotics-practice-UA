@@ -1,0 +1,8 @@
+<launch>
+    <!-- <include file="$(find robotica_inteligente)/launch/load_scene.launch"/> -->
+
+    <node name="object_localization" pkg="robotica_inteligente" type="object_localization.py" output="screen"/>
+    <node name="move_robot_arm" pkg="robotica_inteligente" type="move_robot_arm.py" output="screen"/>
+    <!-- <node name="obstacle_detection" pkg="robotica_inteligente" type="obstacle_detection.py" output="screen"/>
+    <node name="blue_navigation" pkg="robotica_inteligente" type="blue_navigation.py" output="screen"/> -->
+</launch>
