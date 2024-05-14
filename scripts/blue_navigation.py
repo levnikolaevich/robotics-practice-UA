@@ -46,6 +46,7 @@ class BlueTrajectoryPlanner(object):
         self.goal_reached = False  # Para esperar que el UR5 nos comunique que nos acerquemos.
         self.goal_id = 0
         self.local_path = [] 
+        self.state = None
         
         # Definir точку назначения. También можно определить несколько точек для маневрирования.
         self.goals = [geometry_msgs.msg.Point(5.0, 3.5, 0.0)]  # Точка назначения около UR5
@@ -59,6 +60,16 @@ class BlueTrajectoryPlanner(object):
         # Publishers definition
         self.ackermann_command_publisher = rospy.Publisher("/blue/ackermann_cmd", ackermann_msgs.msg.AckermannDrive, queue_size=10)
         self.marker_publisher = rospy.Publisher("/local_path", MarkerArray, queue_size=10)
+
+        self.ur5_status_subscriber = rospy.Subscriber("/ur5/status", std_msgs.msg.String, self.ur5_status_callback)
+        self.blue_status_publisher = rospy.Publisher("/blue/status", std_msgs.msg.String, queue_size=1)
+
+
+    def ur5_status_callback(self, msg):
+        if msg.data == "COME_ON":
+            self.state = "UR5_READY"
+        elif msg.data == "LET_S_GO":
+            self.state = "UR5_DONE"
 
     # Callbacks
     # Adaptar este callback para no depender de la posición aportada por el simulador Gazebo.
@@ -107,7 +118,9 @@ class BlueTrajectoryPlanner(object):
 
     # Planificar una trayectoria hacia el objetivo evitando obstáculos, se ejecutada a una frecuencia más baja.
     def localGoalCalculation(self):
+        print("localGoalCalculation started")
         if self.position is None or self.goal_reached or self.limits is None:
+            print("self.position is None or self.goal_reached or self.limits is None")
             return
         # Definición de parámetros
         wa, wr, ar, aa = 100.0, 1.0, 0.8, 0.3
@@ -210,6 +223,7 @@ class BlueTrajectoryPlanner(object):
         # Detectar si ha llegado al siguiente punto objetivo. 
         if self.distance(self.position, self.goals[self.goal_id]) < self.reached_distance:
             print("Goal reached")
+            self.blue_status_publisher.publish(std_msgs.msg.String(data="I_AM_HERE"))
             self.goal_reached = True
             self.ackermann_command_publisher.publish(ackermann_control)
             return
@@ -324,12 +338,26 @@ class BlueTrajectoryPlanner(object):
         rate = rospy.Rate(self.rate)
         count = 3
         while not rospy.is_shutdown():
-            self.controlActionCalculation()
-            if count == 0:
-                self.localGoalCalculation()
-                count = 3
-            else:
-                count -= 1
+            if self.state == "UR5_READY":
+                print("Blue started their path a the UR5")
+                print(f"BLUE: current goal is {self.goals}")
+                self.controlActionCalculation()
+                if count == 0:
+                    self.localGoalCalculation()
+                    count = 3
+                else:
+                    count -= 1
+            elif self.state == "UR5_DONE":
+                print("Blue started their path at home")
+                self.goals = [geometry_msgs.msg.Point(0.0, 0.0, 0.0)] 
+                print(f"BLUE: current goal is {self.goals}")
+                self.controlActionCalculation()
+                if count == 0:
+                    self.localGoalCalculation()
+                    count = 3
+                else:
+                    count -= 1
+
             rate.sleep()
 
 def main():

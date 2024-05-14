@@ -65,7 +65,7 @@ OPEN_JOINT_STATE = [3 * TO_RADIANT,
                     -3 * TO_RADIANT, 
                     3 * TO_RADIANT, 
                     0 * TO_RADIANT, 
-                    -4 * TO_RADIANT]
+                    -3 * TO_RADIANT]
 
 CLOSE_JOINT_STATE = [23*TO_RADIANT, 
                      40*TO_RADIANT, 
@@ -82,7 +82,6 @@ class UR5State(Enum):
     READY_TO_TAKE = auto()
     FULL = auto()
     INIT_WITH_CARGO = auto()
-    READY_TO_PUT = auto()
     EMPTY = auto()
 
 class MoveUR5Node(object):
@@ -116,7 +115,8 @@ class MoveUR5Node(object):
         self.state = None
         # Variables
         self.box_name = ""
-        self.object_position=geometry_msgs.msg.Point()
+        self.object_position = geometry_msgs.msg.Point()
+        self.blue_position = geometry_msgs.msg.Point()
 
         #Eliminar todos los objetos de la escena si los hay.
         self.scene.remove_attached_object(self.move_arm.get_end_effector_link())
@@ -132,20 +132,30 @@ class MoveUR5Node(object):
         self.position_subscriber = rospy.Subscriber("/pose_array",
             geometry_msgs.msg.PoseArray, self.detection_callback, queue_size=1)
 
+        self.blue_status = None
+        self.blue_status_subscriber = rospy.Subscriber("/blue/status", std_msgs.msg.String, self.blue_status_callback)
+        self.ur5_status_publisher = rospy.Publisher("/ur5/status", std_msgs.msg.String, queue_size=1)
+
     def init_robot_arm(self):
         self.detach_object()              
         self.go_to_joint_arm_state(HOME_JOINT_STATE)
         self.go_to_joint_gripper_state(OPEN_JOINT_STATE)
         self.state = UR5State.INIT
         print(f"UR5 is ready. self.state: {self.state}")
-        
+    
+    def blue_status_callback(self, msg):
+        if msg.data != self.blue_status:
+            self.blue_status = msg.data
+            print(f"NEW self.blue_status {self.blue_status}")
+
     def detection_callback(self, pose_array:geometry_msgs.msg.PoseArray):
         # Comprobar si se ha detectado el objeto
         # Esto se comunica mediante la posición en z.
         object_position=pose_array.poses[0].position
-        if object_position.z<0: return
-
-        self.object_position=object_position
+        if object_position.z >= 0:
+            self.object_position = object_position
+        
+        self.blue_position = pose_array.poses[1].position
     
 
     def go_to_joint_arm_state(self, joint_goal):
@@ -242,56 +252,68 @@ class MoveUR5Node(object):
     #TODO definir funciones para realizar la tarea de agarrar el objeto y dejarlo en el robot. Considerar una máquina de estados para coordianr el proceso.
     #Nota: Se puede obtener la pose actual del brazo (posición y orientación) mediante "self.move_arm.get_current_pose()"
     def excecute_plan(self):
-        print("Starting...")
+        print(f"UR5: current self.state: {self.state}, blue_status {self.blue_status}")
 
-        approach_pose = geometry_msgs.msg.Pose()
-        approach_pose.position.x = self.object_position.x - ROBOT_POSITION.x# + 0.02
-        approach_pose.position.y = self.object_position.y - ROBOT_POSITION.y
-        approach_pose.position.z = 0.5 # Aproximar desde cierta altura
-        approach_pose.orientation = self.move_arm.get_current_pose().pose.orientation 
-
-        print(f"toX: {approach_pose.position.x }")
-        print(f"toY: {approach_pose.position.y }")
-        print(f"toZ: {approach_pose.position.z }")
-
-
-            # INIT = auto()
-            # READY_TO_TAKE = auto()
-            # FULL = auto()
-            # INIT_WITH_CARGO = auto()
-            # READY_TO_PUT = auto()
-            # EMPTY = auto()
         if self.state == UR5State.INIT:
-            print(f"self.state: {self.state}")
+            approach_pose = geometry_msgs.msg.Pose()
+            approach_pose.position.x = self.object_position.x - ROBOT_POSITION.x + 0.01
+            approach_pose.position.y = self.object_position.y - ROBOT_POSITION.y - 0.01
+            approach_pose.position.z = 0.5 # Aproximar desde cierta altura
+            approach_pose.orientation = self.move_arm.get_current_pose().pose.orientation 
+
+            print(f"UR5: approach_pose | OBJECT toX: {approach_pose.position.x } toY: {approach_pose.position.y } toZ: {approach_pose.position.z }")
+
             if(self.go_to_pose_arm_goal(approach_pose)):
                 self.state = UR5State.READY_TO_TAKE
-                print(f"NEW self.state: {self.state}")
+
         elif self.state== UR5State.READY_TO_TAKE:
-            approach_pose.position.z = 0.4
+            approach_pose = geometry_msgs.msg.Pose()
+            approach_pose.position.x = self.object_position.x - ROBOT_POSITION.x + 0.01
+            approach_pose.position.y = self.object_position.y - ROBOT_POSITION.y - 0.01
+            approach_pose.position.z = 0.4 # Aproximar desde cierta altura
+            approach_pose.orientation = self.move_arm.get_current_pose().pose.orientation 
+            
+            print(f"UR5: approach_pose | OBJECT toX: {approach_pose.position.x } toY: {approach_pose.position.y } toZ: {approach_pose.position.z }")
+
             if(self.go_to_pose_arm_goal(approach_pose)):
                 self.go_to_joint_gripper_state(CLOSE_JOINT_STATE)
                 self.attach_object()
                 self.state = UR5State.FULL
-                print(f"NEW self.state: {self.state}")
+                self.ur5_status_publisher.publish(std_msgs.msg.String(data="COME_ON"))
+
         elif self.state == UR5State.FULL:
-            print(f"self.state: {self.state}")
             if(self.go_to_joint_arm_state(HOME_JOINT_STATE)):
                 self.state = UR5State.INIT_WITH_CARGO
-                print(f"NEW self.state: {self.state}")
-            
-                # self.init_robot_arm()
-                # if(self.go_to_joint_arm_state(HOME_JOINT_STATE)):
-                #    self.state=4
-                #    self.detach_object()
-                #    self.state=1
-                #    print(f"NEW self.state: {self.state}")               
+
+        elif self.state == UR5State.INIT_WITH_CARGO and self.blue_status == "I_AM_HERE":
+            approach_pose = geometry_msgs.msg.Pose()
+            approach_pose.position.x = self.blue_position.x - ROBOT_POSITION.x
+            approach_pose.position.y = self.blue_position.y - ROBOT_POSITION.y
+            approach_pose.position.z = 0.6 # Aproximar desde cierta altura
+            approach_pose.orientation = self.move_arm.get_current_pose().pose.orientation 
+            print(f"UR5: approach_pose | BLUE toX: {approach_pose.position.x } toY: {approach_pose.position.y } toZ: {approach_pose.position.z }")
+            if(self.go_to_pose_arm_goal(approach_pose)):
+                self.detach_object()
+                self.go_to_joint_gripper_state(OPEN_JOINT_STATE)
+                self.state = UR5State.EMPTY
+                self.ur5_status_publisher.publish(std_msgs.msg.String(data="LET_S_GO"))
+                print(f"UR5: NEW self.state: {self.state}")    
+
+        elif self.state == UR5State.EMPTY:
+            print(f"UR5: current self.state: {self.state}")
+            if(self.go_to_joint_arm_state(HOME_JOINT_STATE)):
+                self.state = None
+                print(f"UR5: finished the task")               
     
     def run(self):
         #Bucle de control
-        rate = rospy.Rate(10)
+        rate = rospy.Rate(30)
+        count = 0
         while not rospy.is_shutdown():
+            print(f"UR5: Starting bucle {count}... ")
             self.excecute_plan()
             rate.sleep()
+            count+=1
 
 def all_close(goal, actual, tolerance):
         """
@@ -299,17 +321,14 @@ def all_close(goal, actual, tolerance):
         For a Pose, it also compares the angle between the two quaternions.
         """
         if isinstance(goal, list):
-            print(f'all_close goal is {type(goal)}, actual is {type(actual)}')
             for index in range(len(goal)):
                 if abs(actual[index] - goal[index]) > tolerance:
                     return False
 
         elif isinstance(goal, geometry_msgs.msg.PoseStamped):
-            print(f'all_close goal is {type(goal)}, actual is {type(actual)}')
             return all_close(goal.pose, actual.pose, tolerance)
 
         elif isinstance(goal, geometry_msgs.msg.Pose):
-            print(f'all_close goal is {type(goal)}, actual is {type(actual)}')
             x0, y0, z0, qx0, qy0, qz0, qw0 = pose_to_list(actual)
             x1, y1, z1, qx1, qy1, qz1, qw1 = pose_to_list(goal)
             # Euclidean distance for position
@@ -319,7 +338,6 @@ def all_close(goal, actual, tolerance):
             return d <= tolerance and cos_phi_half >= math.cos(tolerance / 2.0)
         
         elif isinstance(goal, geometry_msgs.msg.Point):
-            print(f'all_close goal is {type(goal)}, actual is {type(actual)}')
             x0, y0, z0 = actual.x, actual.y, actual.z
             x1, y1, z1 = goal.x, goal.y, goal.z
             # Euclidean distance
@@ -330,7 +348,7 @@ def all_close(goal, actual, tolerance):
 
 def main():
     try:
-        print("Init move_UR5_node")
+        print("UR5: Init move_UR5_node")
         node = MoveUR5Node()
         node.run()
         

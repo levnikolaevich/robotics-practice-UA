@@ -22,8 +22,8 @@ if __name__ == '__main__':
     while np.linalg.norm(mu-point)>0.5:
         point = np.random.normal(mu, sigma)
 
-    point[0] = 5
-    point[1] = 3.5
+    point[0] = 4
+    point[1] = 3.75
     object_pose   =   Pose(Point(x=point[0], y=point[1],    z=0.1),   Quaternion(x=0.0, y=0.0, z=0.0, w=1.0))
     spawn_model("Object", object_model, "object", object_pose, "world")
 

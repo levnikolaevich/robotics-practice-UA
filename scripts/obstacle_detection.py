@@ -24,7 +24,7 @@ pub_freezone  = None
 # tienen un valor negativo
 
 altura = -0.25
-radio = 5
+radio = 6
 
 def filter_obstacles_function(point_cloud_in, altura):
 

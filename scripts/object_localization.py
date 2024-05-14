@@ -23,6 +23,7 @@ pose_array_pub = None
 obt_detec = False
 robot_detec = False
 depth_image = None  # Added global variable for depth image
+print_count = 10
 
 def filter_img_objects(color_image, lower, upper):
     # Convert the image from RGB to HSV for filtering
@@ -69,7 +70,7 @@ def img_xyz(centroid, depth_image, camera_matrix):
     return x, y, z
 
 def camera_info_callback(camera_info_msg):
-    global centroide_obj, centroide_blue, depth_image, depth_blue, pose_array_pub, obt_detec, robot_detec
+    global centroide_obj, centroide_blue, depth_image, depth_blue, pose_array_pub, obt_detec, robot_detec, print_count
 
     # Initialize XYZ coordinates of the objects
     x_obj, y_obj, z_obj = 0, 0, -1
@@ -84,9 +85,12 @@ def camera_info_callback(camera_info_msg):
     # Invert the Y axis to match global axes
     y_obj, y_blue = -y_obj, -y_blue
 
-    # Print the results
-    print("XYZ object: {:.3f}, {:.3f}, {:.3f}".format(x_obj, y_obj, z_obj))
-    print("XYZ robot : {:.3f}, {:.3f}, {:.3f}".format(x_blue, y_blue, z_blue))
+    # Print the results    
+    print_count -= 1
+    if print_count == 0:
+       print("XYZ object: {:.3f}, {:.3f}, {:.3f}".format(x_obj, y_obj, z_obj))
+       print("XYZ robot : {:.3f}, {:.3f}, {:.3f}".format(x_blue, y_blue, z_blue))
+       print_count = 10
 
     # Create a PoseArray message
     pose_array_msg = PoseArray()
