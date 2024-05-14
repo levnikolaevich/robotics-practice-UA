@@ -51,19 +51,19 @@ class BlueTrajectoryPlanner(object):
 
         # TODO inicializar posición objetivo. También se pueden considerar varios puntos objetivos para maniobrar y acercarse al UR5.
         self.goal_id = 0
-        self.goals = [geometry_msgs.msg.Point(5.0, 3.5, 0.0), geometry_msgs.msg.Point(0.0, 0.0, 0.0)]
+        self.goals = [geometry_msgs.msg.Point(5.0, 2.0, 0.0), geometry_msgs.msg.Point(0.0, 0.0, 0.0)]
 
         # TODO considerar más subscribers/publishers necesarios
         # Subscribers definition
-        # self.position_subscriber = rospy.Subscriber("/blue/ground_truth",
-        #     Odometry, self.position_callback, queue_size=1)
+        self.position_subscriber = rospy.Subscriber("/blue/ground_truth",
+             Odometry, self.position_callback, queue_size=1)
         self.obstacles_subscriber = rospy.Subscriber("/obstacles",
             sensor_msgs.msg.PointCloud2, self.obstacles_callback, queue_size=1)
         self.obstacles_subscriber = rospy.Subscriber("/free_zone",
             sensor_msgs.msg.PointCloud2, self.limits_callback, queue_size=1)
         
-        self.position_camera_subscriber = rospy.Subscriber("/pose_array",
-            geometry_msgs.msg.PoseArray, self.detection_camera_callback, queue_size=1)
+        # self.position_camera_subscriber = rospy.Subscriber("/pose_array",
+        #     geometry_msgs.msg.PoseArray, self.detection_camera_callback, queue_size=1)
 
         ## Publishers definition
         self.ackermann_command_publisher = rospy.Publisher(
@@ -78,11 +78,17 @@ class BlueTrajectoryPlanner(object):
             queue_size=10,
         )
 
+    def position_callback(self, data: Odometry):
+        self.position = data.pose.pose.position
+        quaternion = (data.pose.pose.orientation.x, data.pose.pose.orientation.y,
+                      data.pose.pose.orientation.z, data.pose.pose.orientation.w)
+        euler = tf_conversions.transformations.euler_from_quaternion(quaternion)
+        self.theta = euler[2]
         
     #Callbacks
     #Adaptar este callback para no depender de la posición aportada por el simulador Gazebo.    
     def detection_camera_callback(self, pose_array:geometry_msgs.msg.PoseArray):
-        print(pose_array)
+        #print(pose_array)
         if len(pose_array.poses) > 1:  # Проверка, что массив поз не пуст и содержит как минимум две позы
                     self.position = pose_array.poses[1].position
                     euler = tf_conversions.transformations.euler_from_quaternion([
@@ -97,29 +103,12 @@ class BlueTrajectoryPlanner(object):
 
 
     def obstacles_callback(self, obstacles: sensor_msgs.msg.PointCloud2):
-        self.obstacles = []
-        for point in pc2.read_points(obstacles, field_names=("x", "y", "z"), skip_nans=True):
-            x, y, z = point
-            new_point = geometry_msgs.msg.Point(x, y, z)
-            self.obstacles.append(new_point)
-        rospy.loginfo(f"Obstacles updated: {len(self.obstacles)} points")
+        self.obstacles = [geometry_msgs.msg.Point(x=p[0], y=p[1], z=p[2])
+                          for p in pc2.read_points(obstacles, field_names=("x", "y", "z"), skip_nans=True)]
 
-
-    def limits_callback(self, limits:sensor_msgs.msg.PointCloud2):
-        pc_limits=pc2.read_points(limits, field_names=("x", "y", "z"), skip_nans=True)
-        #Guardar como geometry_msg.Point
-        self.limits=[]
-
-        #Reducir la nube de puntos para acelerar la búsqueda
-        num_points = max(int(limits.width/18),0)
-        count=0
-        for point in pc_limits:
-            if count==0:
-                x,y,z = point
-                new_point = geometry_msgs.msg.Point(x,y,z)
-                self.limits.append(new_point)
-                count=num_points
-            else: count-=1
+    def limits_callback(self, limits: sensor_msgs.msg.PointCloud2):
+        self.limits = [geometry_msgs.msg.Point(x=p[0], y=p[1], z=p[2])
+                       for p in pc2.read_points(limits, field_names=("x", "y", "z"), skip_nans=True)]
 
 
     # Planificar una trayectoria hacia el objetivo evitando obstáculos, se ejecutada a una frecuencia más baja.
@@ -203,7 +192,7 @@ class BlueTrajectoryPlanner(object):
         marker_msg = MarkerArray()
         for id, point in enumerate(self.local_path):
             marker = Marker()
-            marker.header.frame_id = "blue/velodyne" #TODO publicar en el tf con el namespace blue para coordinar los frames
+            marker.header.frame_id = "blue/velodyne"
             marker.header.stamp = rospy.Time()
             marker.id = id
             marker.type = Marker.SPHERE
@@ -236,28 +225,32 @@ class BlueTrajectoryPlanner(object):
             self.ackermann_command_publisher.publish(ackermann_control)
             return
         
+        self.margin = 0.3
         # Reducer la velocidad cuando se acerca al objetivo
-        goal_distance = self.distance(self.position, current_goal) 
+        goal_distance = self.distance(self.position, current_goal)
         if goal_distance - self.reached_distance < self.slow_down_distance:
             speed = MIN_SPEED
-            #Establecer el objetivo como objetivo local
-            self.local_path[-2] = self.global2local(current_goal)
+            # Establecer el objetivo como objetivo local
+            if len(self.local_path) >= 2:
+                self.local_path[-2] = self.global2local(current_goal)
+            else:
+                self.local_path.append(self.global2local(current_goal))
             print('BLUE: next stop - finish')
         else:
-            self.margin=1.0
-            speed=MAX_SPEED
+            self.margin = 0.3
+            speed = MAX_SPEED
             print('BLUE: continue moving...')
 
         #Inicializar variables
         min_error = 1000
 
         # Comprobar posibles acciones de control
-        for steer in np.arange(-MAX_STEER_ANGLE, MAX_STEER_ANGLE+0.01, self.delta_angle):
-            if abs(steer)<0.01: steer=0.0
-            #Reducir la velocidad cuando el giro es mayor
-            k_sp = (MAX_STEER_ANGLE-abs(steer))/MAX_STEER_ANGLE
-            speed2 = max(speed*k_sp, MIN_SPEED)
-
+        for steer in np.arange(-MAX_STEER_ANGLE, MAX_STEER_ANGLE + 0.01, self.delta_angle):
+            if abs(steer) < 0.01:
+                steer = 0.0  # Игнорировать очень маленькие углы
+            k_sp = (MAX_STEER_ANGLE - abs(steer)) / MAX_STEER_ANGLE
+            speed2 = max(speed * k_sp, MIN_SPEED)
+            
             # Comprobar movimiento hacia adelante y hacia atrás.
             directions = [-speed2, speed2]
             for dir in directions:
@@ -303,7 +296,7 @@ class BlueTrajectoryPlanner(object):
                     if error < min_error:
                         min_error=error
                         ackermann_control.steering_angle=steer
-                        ackermann_control.speed=dir
+                        ackermann_control.speed = dir * speed2
         
         #Publicar el mensaje
         self.ackermann_command_publisher.publish(ackermann_control)
