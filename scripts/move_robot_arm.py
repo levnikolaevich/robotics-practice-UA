@@ -109,9 +109,9 @@ class MoveUR5Node(object):
         ## En principio, este grupo no es necesario utilizarlo en esta práctica.
 
         ## La interfaz se utiliza para planificar y ejecutar los movimientos:
-        self.move_arm = moveit_commander.MoveGroupCommander("arm", wait_for_servers=10.0)
-        self.move_arm.set_planning_time(10.0)
-        self.move_gripper = moveit_commander.MoveGroupCommander("gripper", wait_for_servers=10.0)
+        self.move_arm = moveit_commander.MoveGroupCommander("arm", wait_for_servers=20.0)
+        self.move_arm.set_planning_time(20.0)
+        self.move_gripper = moveit_commander.MoveGroupCommander("gripper", wait_for_servers=20.0)
         self.state = None
         # Variables
         self.box_name = ""
@@ -178,7 +178,7 @@ class MoveUR5Node(object):
 
         # Comprobar que ha llegado al objetivo
         current_joints = self.move_arm.get_current_joint_values()
-        return all_close(joint_goal, current_joints, 0.015)
+        return all_close(joint_goal, current_joints, 0.025)
     
     def go_to_joint_gripper_state(self, joint_goal):
         ## Movimiento a una posición articular de la pinza
@@ -208,18 +208,22 @@ class MoveUR5Node(object):
         print(pose_goal)
         # Establecemos la posición actual y mediante el comando go() planificamos y
         # ejecutamos el movimiento. Nos devuelve si ha podido realizarlo.
-        self.move_arm.set_pose_target(pose_goal)
-        success = self.move_arm.go(wait=True)
+        try:
+            self.move_arm.set_pose_target(pose_goal)
+            success = self.move_arm.go(wait=True)
 
-        # La función stop() se asegura de que no hay movimiento residual.
-        self.move_arm.stop()
+            # La función stop() se asegura de que no hay movimiento residual.
+            self.move_arm.stop()
 
-        # Siempre es bueno limpiar las poses objetivo.
-        self.move_arm.clear_pose_targets()
+            # Siempre es bueno limpiar las poses objetivo.
+            self.move_arm.clear_pose_targets()
 
-        # Comprobar que ha llegado al objetivo
-        current_pose = self.move_arm.get_current_pose().pose
-        return all_close(pose_goal, current_pose, 0.1)
+            # Comprobar que ha llegado al objetivo
+            current_pose = self.move_arm.get_current_pose().pose
+            return all_close(pose_goal, current_pose, 0.1)
+        except Exception as e:
+            rospy.logerr(f"UR5: Exception in go_to_pose_arm_goal: {e}")
+            return False
 
     def add_object(self, object_position:geometry_msgs.msg.Point):
         ## Añadir el objeto a la escena. La posición del objeto (x, y)
@@ -265,6 +269,7 @@ class MoveUR5Node(object):
 
             if(self.go_to_pose_arm_goal(approach_pose)):
                 self.state = UR5State.READY_TO_TAKE
+                self.ur5_status_publisher.publish(std_msgs.msg.String(data="COME_ON"))
 
         elif self.state== UR5State.READY_TO_TAKE:
             approach_pose = geometry_msgs.msg.Pose()
@@ -279,23 +284,23 @@ class MoveUR5Node(object):
                 self.go_to_joint_gripper_state(CLOSE_JOINT_STATE)
                 self.attach_object()
                 self.state = UR5State.FULL
-                self.ur5_status_publisher.publish(std_msgs.msg.String(data="COME_ON"))
 
         elif self.state == UR5State.FULL:
-            if(self.go_to_joint_arm_state(HOME_JOINT_STATE)):
-                self.state = UR5State.INIT_WITH_CARGO
+            self.go_to_joint_arm_state(HOME_JOINT_STATE)
+            self.state = UR5State.INIT_WITH_CARGO
 
         elif self.state == UR5State.INIT_WITH_CARGO and self.blue_status == "I_AM_HERE":
             approach_pose = geometry_msgs.msg.Pose()
             approach_pose.position.x = self.blue_position.x - ROBOT_POSITION.x
             approach_pose.position.y = self.blue_position.y - ROBOT_POSITION.y
-            approach_pose.position.z = 0.6 # Aproximar desde cierta altura
+            approach_pose.position.z = 0.7 # Aproximar desde cierta altura
             approach_pose.orientation = self.move_arm.get_current_pose().pose.orientation 
             print(f"UR5: approach_pose | BLUE toX: {approach_pose.position.x } toY: {approach_pose.position.y } toZ: {approach_pose.position.z }")
-            if(self.go_to_pose_arm_goal(approach_pose)):
-                self.detach_object()
+            self.detach_object()
+            if(self.go_to_pose_arm_goal(approach_pose)):                
                 self.go_to_joint_gripper_state(OPEN_JOINT_STATE)
                 self.state = UR5State.EMPTY
+                rospy.sleep(5)
                 self.ur5_status_publisher.publish(std_msgs.msg.String(data="LET_S_GO"))
                 print(f"UR5: NEW self.state: {self.state}")    
 
@@ -304,7 +309,10 @@ class MoveUR5Node(object):
             if(self.go_to_joint_arm_state(HOME_JOINT_STATE)):
                 self.state = None
                 print(f"UR5: finished the task")               
-    
+        else:
+            print(f"UR5: sleep")   
+            rospy.sleep(5)
+
     def run(self):
         #Bucle de control
         rate = rospy.Rate(30)
