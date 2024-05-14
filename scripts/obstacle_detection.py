@@ -23,8 +23,8 @@ pub_freezone  = None
 # Importante: Considerar que el sensor LiDAR esta sobre el robot. Los puntos de la nube de puntos bajo el sensor 
 # tienen un valor negativo
 
-altura = 
-radio = 
+altura = -0.25
+radio = 5
 
 def filter_obstacles_function(point_cloud_in, altura):
 
@@ -42,7 +42,6 @@ def filter_obstacles_function(point_cloud_in, altura):
     # El criterio de deteccion es dependiendo de la altura del objeto, al ser el objeto mayor a una altura dada
     # es considerado como posible obstaculo
     for point in pc_data:
-
         x, y, z = point
 
         #TODO 
@@ -50,14 +49,13 @@ def filter_obstacles_function(point_cloud_in, altura):
         # Importante: Los puntos añadidos a obstacle_points se proyectan al valor de altura, es decir que.
         # las coordenadas de un obstaculo (x,y,z) se cambiaran a (x,y,altura)
 
-        if # condicion de altura comparada con Z
-            
+        if z > altura:  # condicion de altura comparada con Z
             # Agregar punto a los obstaculos detectados:
-            obstacles_points.append([])
+            obstacles_points.append([x, y, altura])
 
     return obstacles_points
 
-def free_zone_function(point_cloud_in, radio,altura):
+def free_zone_function(point_cloud_in, radio, altura):
 
     # Funcion que tiene como entrada un mensaje de ROS tipo PointCloud2 y entrega una nube de puntos 
     # con un radio y altura dada. Esta nube de puntos de salida representa las zonas libres de obstaculos 
@@ -77,20 +75,18 @@ def free_zone_function(point_cloud_in, radio,altura):
         
         #TODO
         # Verificar si el punto esta fuera del radio dada la distancia x,y 
-        if 
-
+        if np.sqrt(x**2 + y**2) < radio:
             # Para crear un radio de zonas libres se debe conocer el angulo de cada punto segun su coordenada x,y
         
             # Calcular el angulo segun de las coordenadas XY (arcotangte)
-            ang =
+            ang = np.arctan2(y, x)
 
             # Calcular las nuevas coordenadas x, y segun el angulo y el radio 
-            new_x =
-            new_y =
+            new_x = radio * np.cos(ang)
+            new_y = radio * np.sin(ang)
             
             # Agregar punto al anillo con componente z igual a altura
-            free_zone.append([])
-
+            free_zone.append([new_x, new_y, altura])
 
     return free_zone
 
@@ -126,7 +122,7 @@ def point_cloud_callback(msg):
     obstacles_points = filter_obstacles_function(msg, altura)
 
     # Nube de puntos de las zonas libres generado por la funcion "free_zone_function"
-    free_zone_points = free_zone_function(msg, radio,altura)
+    free_zone_points = free_zone_function(msg, radio, altura)
 
     # Publica los obstaculos y la zona libre
     publish_topics(obstacles_points, free_zone_points)
