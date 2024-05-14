@@ -251,11 +251,11 @@ class BlueTrajectoryPlanner(object):
             speed2 = max(speed * k_sp, MIN_SPEED)
 
             # Comprobar movimiento hacia adelante и назад.
-            directions = [speed2]  # Исключить движение назад для упрощения
+            directions = [speed2, -speed2]  # Добавляем движение назад
             for dir in directions:
                 flag_collision_risk = False
 
-                # Calcular radio и velocidad de giro mediante la cinemática del robot.
+                # Calcular radio и velocidad de giro mediante la cinemática del робот.
                 if steer == 0:
                     radius = float('inf')  # Прямолинейное движение
                     angular_velocity = 0
@@ -263,24 +263,27 @@ class BlueTrajectoryPlanner(object):
                     radius = VEHICLE_LENGHT / tan(steer)
                     angular_velocity = dir / radius
 
-                # Calcular la trayectoria mediante el ángulo de giro
+                rospy.loginfo(f"Steering: {steer}, Speed: {dir}, Radius: {radius}, Angular Velocity: {angular_velocity}")
+
+                # Вычисление траектории с помощью угла поворота
                 for sample in np.arange(self.delta_sample, self.max_sample + 0.01, self.delta_sample):
                     local_point = geometry_msgs.msg.Point()
                     local_point.x = self.position.x + sample * cos(self.theta + angular_velocity * sample)
                     local_point.y = self.position.y + sample * sin(self.theta + angular_velocity * sample)
 
-                    # Detectar riesgo de colisiones
+                    # Обнаружение риска столкновений
                     for obstacle in self.obstacles:
                         if self.distance(local_point, obstacle) < 0.5:
                             flag_collision_risk = True
+                            rospy.logwarn("Collision risk detected")
                             break
 
                     if flag_collision_risk:
                         break
 
-                # Si no hay colisiones, calcular su puntuación.
+                # Если нет столкновений, вычислить его оценку.
                 if not flag_collision_risk:
-                    # Calcular la puntuación de la trayectoria en base al error en distancia и ángulo al objetivo (self.local_path[-2]).
+                    # Вычисление оценки траектории на основе ошибки в расстоянии и угле к цели (self.local_path[-2]).
                     if len(self.local_path) > 1:
                         error = self.distance(local_point, self.local_path[-2])
                         if error < min_error:
@@ -288,9 +291,8 @@ class BlueTrajectoryPlanner(object):
                             ackermann_control.steering_angle = steer
                             ackermann_control.speed = dir
 
-        # Publicar el mensaje
+        rospy.loginfo(f"Published ackermann control: speed={ackermann_control.speed}, steering_angle={ackermann_control.steering_angle}")
         self.ackermann_command_publisher.publish(ackermann_control)
-
 
 
     def distance(self, p1: geometry_msgs.msg.Point, p2: geometry_msgs.msg.Point):
@@ -338,7 +340,7 @@ class BlueTrajectoryPlanner(object):
         rate = rospy.Rate(self.rate)
         count = 3
         while not rospy.is_shutdown():
-            if self.state == "UR5_READY":
+            if self.state == "UR5_READY" or True:
                 print("Blue started their path a the UR5")
                 print(f"BLUE: current goal is {self.goals}")
                 self.controlActionCalculation()
