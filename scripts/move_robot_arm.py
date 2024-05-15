@@ -292,9 +292,9 @@ class MoveUR5Node(object):
 
         elif self.state == UR5State.INIT_WITH_CARGO and self.blue_status == "I_AM_HERE":
             approach_pose = geometry_msgs.msg.Pose()
-            approach_pose.position.x = self.blue_position.x - ROBOT_POSITION.x
-            approach_pose.position.y = self.blue_position.y - ROBOT_POSITION.y
-            approach_pose.position.z = 0.78 # Aproximar desde cierta altura
+            approach_pose.position.x = self.blue_position.x - ROBOT_POSITION.x - 0.05
+            approach_pose.position.y = self.blue_position.y - ROBOT_POSITION.y - 0.05
+            approach_pose.position.z = 0.8 # Aproximar desde cierta altura
             approach_pose.orientation = self.move_arm.get_current_pose().pose.orientation 
             print(f"UR5: approach_pose | BLUE toX: {approach_pose.position.x } toY: {approach_pose.position.y } toZ: {approach_pose.position.z }")
 
