@@ -201,6 +201,7 @@ class MoveUR5Node(object):
         # fallar cuando no lo cierra completamente al agarrar el objeto, y en ese
         # caso cumple su objetivo también.
 
+
     def go_to_pose_arm_goal(self, pose_goal:geometry_msgs.msg.Pose):
         ## Movimiento a una pose global, definida por la posición cartesiana y orientación objtivo
         ## de la muñeca del UR5.
@@ -293,15 +294,16 @@ class MoveUR5Node(object):
             approach_pose = geometry_msgs.msg.Pose()
             approach_pose.position.x = self.blue_position.x - ROBOT_POSITION.x
             approach_pose.position.y = self.blue_position.y - ROBOT_POSITION.y
-            approach_pose.position.z = 0.8 # Aproximar desde cierta altura
+            approach_pose.position.z = 0.78 # Aproximar desde cierta altura
             approach_pose.orientation = self.move_arm.get_current_pose().pose.orientation 
             print(f"UR5: approach_pose | BLUE toX: {approach_pose.position.x } toY: {approach_pose.position.y } toZ: {approach_pose.position.z }")
-            self.detach_object()
+
             if(self.go_to_pose_arm_goal(approach_pose)):                
                 self.go_to_joint_gripper_state(OPEN_JOINT_STATE)
                 self.state = UR5State.EMPTY
+                self.detach_object()
                 rospy.sleep(5)
-                self.ur5_status_publisher.publish(std_msgs.msg.String(data="LET_S_GO"))
+                self.ur5_status_publisher.publish(std_msgs.msg.String(data="LET_S_GO"))                    
                 print(f"UR5: NEW self.state: {self.state}")    
 
         elif self.state == UR5State.EMPTY:

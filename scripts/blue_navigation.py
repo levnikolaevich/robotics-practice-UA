@@ -262,7 +262,7 @@ class BlueTrajectoryPlanner(object):
                 self.localGoalCalculation()
 
             elif self.state == "UR5_DONE":
-                self.goals = [geometry_msgs.msg.Point(x=0.0, y=0.0)]  
+                self.goals = [geometry_msgs.msg.Point(x=0.0, y=6.0)]  
                 self.controlActionCalculation()
                 if self.goal_reached:
                     self.goal_reached = False
