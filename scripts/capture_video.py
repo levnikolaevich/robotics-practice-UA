@@ -17,12 +17,15 @@ def video_publisher():
     # cap = cv2.VideoCapture(0)
     video_path = '/home/docker/catkin_ws/src/robotica_inteligente/scripts/gestos.mp4'
     print(os.path.exists(video_path)) 
-    
-    cap = cv2.VideoCapture(video_path) 
-    if not cap.isOpened():
-        rospy.logerr("Unable to open video source")
-        exit()
 
+    def open_video(video_path):
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            rospy.logerr(f"Unable to open video source: {video_path}")
+            return None
+        return cap
+    
+    cap = open_video(video_path)
 
     # Crea una instancia de CvBridge para convertir las imágenes de OpenCV a mensajes de ROS
     bridge = CvBridge()
@@ -35,8 +38,10 @@ def video_publisher():
         print("Opened:", cap.isOpened()) 
         ret, frame = cap.read()
         if not ret:
-            rospy.logerr("Failed to capture image")
-            break
+            rospy.loginfo("Reached end of the video file, restarting...")
+            cap.release()
+            cap = open_video(video_path)
+            continue
 
         # Convierte el frame de OpenCV a un mensaje ROS
         image_msg = bridge.cv2_to_imgmsg(frame, "bgr8")
