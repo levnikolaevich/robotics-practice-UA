@@ -4,10 +4,10 @@
   <node name="obstacle_detection" pkg="robotica_inteligente" type="obstacle_detection.py"/>
   <node name="capture_video" pkg="robotica_inteligente" type="capture_video.py"/>
   <node name="show_camera_robot" pkg="robotica_inteligente" type="show_camera_robot.py"/>
-  <node name="pose_estimation" pkg="robotica_inteligente" type="pose_estimation.py"/>
+  
   
   <!-- 
-  
+  <node name="pose_estimation" pkg="robotica_inteligente" type="pose_estimation.py"/>
   <node name="obstacle_avoidance" pkg="robotica_inteligente" type="obstacle_avoidance.py"/>  
  -->
 

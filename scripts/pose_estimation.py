@@ -19,6 +19,28 @@ hands = mp_hands.Hands(static_image_mode=False,
 # Publicador de mensajes de control
 ackermann_command_publisher = None
 
+def classify_gesture(hand_landmarks):
+    thumb_is_open = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_IP].y
+    index_is_open = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_DIP].y
+    middle_is_open = hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_DIP].y
+    ring_is_open = hand_landmarks.landmark[mp_hands.HandLandmark.RING_FINGER_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.RING_FINGER_DIP].y
+    pinky_is_open = hand_landmarks.landmark[mp_hands.HandLandmark.PINKY_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.PINKY_DIP].y
+
+    print(f"Thumb is open: {thumb_is_open}")
+    print(f"Index is open: {index_is_open}")
+    print(f"Middle is open: {middle_is_open}")
+    print(f"Ring is open: {ring_is_open}")
+    print(f"Pinky is open: {pinky_is_open}")
+
+    if index_is_open and not middle_is_open and not ring_is_open and not pinky_is_open and not thumb_is_open:
+        return 1
+    elif index_is_open and middle_is_open and not ring_is_open and not pinky_is_open and not thumb_is_open:
+        return 2
+    elif thumb_is_open and index_is_open and middle_is_open:
+        return 3
+    else:
+        return 0
+
 def image_callback(msg):
     bridge = CvBridge()
     try:
@@ -37,13 +59,27 @@ def image_callback(msg):
             # Dibujar los landmarks sobre la imagen
             mp_drawing.draw_landmarks(cv_image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-            # TODO: Reconocer el gesto mediante alguna clasificación a partir de los landmarks
+            # Reconocer el gesto mediante alguna clasificación a partir de los landmarks
+            gesture = classify_gesture(hand_landmarks)
+            rospy.loginfo(f"Detected gesture: {gesture}")
 
-            # TODO: Interpretar el gesto obtenido y enviar la orden de control ackermann
-            # Ejemplo de envío de un mensaje
+            # Interpretar el gesto obtenido y enviar la orden de control ackermann
             ackermann_cmd = ackermann_msgs.msg.AckermannDrive()
-            ackermann_cmd.steering_angle = 0.5  # ejemplo: girar a la derecha
-            ackermann_cmd.speed = 1.0           # ejemplo: moverse hacia delante
+
+            print(f'gesture: {gesture}')
+            if gesture == 1:
+                ackermann_cmd.steering_angle = 0.5  # ejemplo: girar a la derecha
+                ackermann_cmd.speed = 1.0           # ejemplo: moverse hacia delante
+            elif gesture == 2:
+                ackermann_cmd.steering_angle = -0.5 # ejemplo: girar a la izquierda
+                ackermann_cmd.speed = 1.0           # ejemplo: moverse hacia delante
+            elif gesture == 3:
+                ackermann_cmd.steering_angle = 0.0  # ejemplo: seguir recto
+                ackermann_cmd.speed = 0.5           # ejemplo: moverse más lento
+            else:
+                ackermann_cmd.steering_angle = 0.0
+                ackermann_cmd.speed = 0.0
+
             ackermann_command_publisher.publish(ackermann_cmd)
 
     # Mostrar la imagen con los landmarks/gestos detectados
@@ -55,9 +91,15 @@ def main():
     rospy.init_node('pose_estimation', anonymous=True)
     rospy.Subscriber("/operator/image", Image, image_callback)
 
-    ## Publisher definition
+    # Publisher definition
+    # ackermann_command_publisher = rospy.Publisher(
+    #         "/blue/preorder_ackermann_cmd",
+    #         ackermann_msgs.msg.AckermannDrive,
+    #         queue_size=10,
+    #     )
+    
     ackermann_command_publisher = rospy.Publisher(
-            "/blue/preorder_ackermann_cmd",
+            "/blue/ackermann_cmd",
             ackermann_msgs.msg.AckermannDrive,
             queue_size=10,
         )

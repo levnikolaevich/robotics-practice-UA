@@ -1,0 +1,88 @@
+sudo apt-get update
+sudo apt-get upgrade -y
+
+sudo apt-get install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+sudo echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+sudo apt-get upgrade -y
+
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin nvidia-cuda-toolkit
+sudo apt install x11-xserver-utils
+
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+sudo apt-get update
+sudo apt-get install -y nvidia-docker2
+
+sudo docker build -t robotica-inteligente  .
+
+Linux
+xhost +local:
+
+=================
+sudo docker run --shm-size=1g --privileged --ulimit memlock=-1 --ulimit stack=67108864 --rm -it --net=host --gpus all -e DISPLAY=:0 --user=root -v /tmp/.X11-unix:/tmp/.X11-unix:rw -v /dev:/dev --name robotica_container --cpuset-cpus=0-3 -v /home/lev/robotica_practica/src/robotica_inteligente:/home/docker/catkin_ws/src/robotica_inteligente robotica-inteligente
+
+sudo docker run --shm-size=1g --privileged --ulimit memlock=-1 --ulimit stack=67108864 --rm -it --net=host --gpus all -e DISPLAY=:0 --user=root -v /tmp/.X11-unix:/tmp/.X11-unix:rw -v /dev:/dev --name robotica_container --cpuset-cpus=0-3 -v /home/lev/robotica_practica/src/robotica_inteligente:/home/docker/catkin_ws/src/robotica_inteligente robotica-inteligente:practica2
+
+
+
+Linux
+sudo docker exec -it robotica_container /bin/bash
+
+
+Docker
+source devel/setup.bash
+chmod +x /home/docker/catkin_ws/src/robotica_inteligente/scripts/show_camera_robot.py 
+chmod +x /home/docker/catkin_ws/src/robotica_inteligente/scripts/capture_video.py
+chmod +x /home/docker/catkin_ws/src/robotica_inteligente/scripts/pose_estimation.py
+chmod +x /home/docker/catkin_ws/src/robotica_inteligente/scripts/obstacle_avoidance.py
+
+
+
+
+
+roslaunch robotica_inteligente teleop_navigation.launch
+roslaunch robotica_inteligente all_stuff.launch
+
+
+roslaunch robotica_inteligente load_scene.launch
+rosrun robotica_inteligente show_camera_robot
+rosrun robotica_inteligente capture_video.py
+rosrun robotica_inteligente pose_estimation.py
+
+roslaunch robotica_inteligente blue_navigation.launch
+
+
+
+rosrun robotica_inteligente object_localization.py
+rosrun robotica_inteligente move_robot_arm.py 
+rosrun robotica_inteligente obstacle_detection.py
+rosrun robotica_inteligente blue_navigation.py
+
+rostopic echo /operator/image
+
+
+home\lev\robotica_practica\src\robotica_inteligente\scripts
+
+
+terminal
+https://github.com/dorssel/usbipd-win
+usbipd bind --busid 1-2
+usbipd attach --wsl --busid 1-2
+usbipd detach --busid 1-2
+
+UBUNTU
+lsusb 
+
+Bus 001 Device 002: ID 046d:0825 Logitech, Inc. Webcam C270
+
+ls -l /dev | grep video
