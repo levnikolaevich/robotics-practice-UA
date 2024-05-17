@@ -11,5 +11,9 @@ catkin_install_python(PROGRAMS scripts/spawn_random_position.py
   scripts/move_robot_arm.py 
   scripts/blue_navigation.py
   scripts/obstacle_detection.py
+  scripts/capture_video.py
+  scripts/obstacle_avoidance.py
+  scripts/pose_estimation.py
+  scripts/show_camera_robot.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
