@@ -17,7 +17,8 @@ hands = mp_hands.Hands(static_image_mode=False,
                        min_tracking_confidence=0.5)
 
 # Publicador de mensajes de control
-ackermann_command_publisher = None
+ackermann_preorder_command_publisher = None
+last_cmd = None
 
 def classify_gesture(hand_landmarks):
     thumb_is_open = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_IP].y
@@ -26,11 +27,11 @@ def classify_gesture(hand_landmarks):
     ring_is_open = hand_landmarks.landmark[mp_hands.HandLandmark.RING_FINGER_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.RING_FINGER_DIP].y
     pinky_is_open = hand_landmarks.landmark[mp_hands.HandLandmark.PINKY_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.PINKY_DIP].y
 
-    print(f"Thumb is open: {thumb_is_open}")
-    print(f"Index is open: {index_is_open}")
-    print(f"Middle is open: {middle_is_open}")
-    print(f"Ring is open: {ring_is_open}")
-    print(f"Pinky is open: {pinky_is_open}")
+    # print(f"Thumb is open: {thumb_is_open}")
+    # print(f"Index is open: {index_is_open}")
+    # print(f"Middle is open: {middle_is_open}")
+    # print(f"Ring is open: {ring_is_open}")
+    # print(f"Pinky is open: {pinky_is_open}")
 
     if index_is_open and not middle_is_open and not ring_is_open and not pinky_is_open and not thumb_is_open:
         return 1
@@ -42,6 +43,7 @@ def classify_gesture(hand_landmarks):
         return 0
 
 def image_callback(msg):
+    global last_cmd
     bridge = CvBridge()
     try:
         # Convertir la imagen de ROS a una imagen de OpenCV
@@ -63,43 +65,39 @@ def image_callback(msg):
             gesture = classify_gesture(hand_landmarks)
             rospy.loginfo(f"Detected gesture: {gesture}")
 
-            # Interpretar el gesto obtenido y enviar la orden de control ackermann
-            ackermann_cmd = ackermann_msgs.msg.AckermannDrive()
+            # Interpretar el gesto obtenido y enviar la orden de control ackermann            
 
             print(f'gesture: {gesture}')
-            if gesture == 1:
-                ackermann_cmd.steering_angle = 0.5  # ejemplo: girar a la derecha
-                ackermann_cmd.speed = 1.0           # ejemplo: moverse hacia delante
-            elif gesture == 2:
-                ackermann_cmd.steering_angle = -0.5 # ejemplo: girar a la izquierda
-                ackermann_cmd.speed = 1.0           # ejemplo: moverse hacia delante
-            elif gesture == 3:
-                ackermann_cmd.steering_angle = 0.0  # ejemplo: seguir recto
-                ackermann_cmd.speed = 0.5           # ejemplo: moverse más lento
-            else:
-                ackermann_cmd.steering_angle = 0.0
-                ackermann_cmd.speed = 0.0
 
-            ackermann_command_publisher.publish(ackermann_cmd)
+            ackermann_cmd = ackermann_msgs.msg.AckermannDrive()
+            if gesture == 1:
+                ackermann_cmd.steering_angle = 0.0  # seguir recto
+                ackermann_cmd.speed = 0.5           # moverse hacia delante
+            elif gesture == 2:
+                ackermann_cmd.steering_angle = 0.5 # girar a la izquierda
+                ackermann_cmd.speed = 0.8           # moverse hacia delante
+            elif gesture == 3:
+                ackermann_cmd.steering_angle = -0.5  # girar a la derecha
+                ackermann_cmd.speed = 0.8           # moverse más lento
+            else:
+                return
+            
+            if last_cmd != ackermann_cmd:
+                ackermann_preorder_command_publisher.publish(ackermann_cmd)
+                last_cmd = ackermann_cmd
 
     # Mostrar la imagen con los landmarks/gestos detectados
     cv2.imshow("Hand Pose Estimation", cv_image)
     cv2.waitKey(1)
 
 def main():
-    global ackermann_command_publisher
+    global ackermann_preorder_command_publisher
     rospy.init_node('pose_estimation', anonymous=True)
     rospy.Subscriber("/operator/image", Image, image_callback)
 
     # Publisher definition
-    # ackermann_command_publisher = rospy.Publisher(
-    #         "/blue/preorder_ackermann_cmd",
-    #         ackermann_msgs.msg.AckermannDrive,
-    #         queue_size=10,
-    #     )
-    
-    ackermann_command_publisher = rospy.Publisher(
-            "/blue/ackermann_cmd",
+    ackermann_preorder_command_publisher = rospy.Publisher(
+            "/blue/preorder_ackermann_cmd",
             ackermann_msgs.msg.AckermannDrive,
             queue_size=10,
         )

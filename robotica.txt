@@ -58,6 +58,7 @@ roslaunch robotica_inteligente load_scene.launch
 rosrun robotica_inteligente show_camera_robot
 rosrun robotica_inteligente capture_video.py
 rosrun robotica_inteligente pose_estimation.py
+rosrun robotica_inteligente obstacle_avoidance.py
 
 roslaunch robotica_inteligente blue_navigation.launch
 
@@ -69,7 +70,7 @@ rosrun robotica_inteligente obstacle_detection.py
 rosrun robotica_inteligente blue_navigation.py
 
 rostopic echo /operator/image
-
+rostopic echo /blue/preorder_ackermann_cmd
 
 home\lev\robotica_practica\src\robotica_inteligente\scripts
 
